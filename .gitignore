@@ -1,0 +1,29 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets — never commit these
+.env
+credentials.json
+token.json
+
+# Attachments saved by the agent
+storage/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor/OS junk
+.vscode/
+.idea/
+.DS_Store
+
+credentials
+token
