@@ -15,7 +15,7 @@ from openai import OpenAI
 from src.config import settings
 from src.logger import log_event
 from src.models import LLMClassification
-from prompts.prompt import CLASSIFICATION_SYSTEM_PROMPT, build_classification_prompt
+from src.prompt import CLASSIFICATION_SYSTEM_PROMPT, build_classification_prompt
 
 _client: Optional[OpenAI] = None
 
