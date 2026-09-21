@@ -24,7 +24,7 @@ from src import database
 from src import tools
 from src.llm import classify
 from src.logger import log_event
-from src.models import Document
+from src.models import Document, ResumeAnalysis, StackExperience
 from src.utils import safe_filename
 
 
@@ -62,7 +62,11 @@ def run() -> RunSummary:
             continue
 
         try:
-            internal_date_ms = _process_message(service, message_id)
+            internal_date_ms, processed = _process_message(service, message_id, after_ms=after_ms)
+            if not processed:
+                summary.skipped += 1
+                continue
+
             database.mark_processed(message_id, internal_date_ms=internal_date_ms, status="success")
             log_event("message_processed", message_id=message_id, internal_date_ms=internal_date_ms)
             summary.processed += 1
@@ -96,24 +100,35 @@ def run() -> RunSummary:
     return summary
 
 
-def _process_message(service, message_id: str) -> int:
+def _process_message(service, message_id: str, after_ms: int = 0) -> tuple[int, bool]:
     """
     Processes one Gmail message through the single-pass inbox-first RAG pipeline.
-    Returns the message internalDate in epoch milliseconds.
+    Returns (internal_date_ms, processed_boolean).
     """
     message = tools.fetch_message_content(service, message_id)
-    headers = tools.parse_email_headers(message)
     internal_date_ms = tools.get_internal_date_ms(message)
 
+    if after_ms > 0 and internal_date_ms < after_ms:
+        log_event(
+            "message_skipped",
+            message_id=message_id,
+            reason="older_than_start_cursor",
+            internal_date_ms=internal_date_ms,
+            after_ms=after_ms,
+        )
+        return internal_date_ms, False
+
+    headers = tools.parse_email_headers(message)
     subject = headers.get("subject", "")
     body_text = tools.get_message_body_text(message)
 
-    user = database.find_or_create_user(headers["from_email"])
+    sender_email = headers.get("from_email", "").strip() or "unknown_sender@domain.local"
+    user = database.find_or_create_user(sender_email)
 
     attachments = tools.list_attachments(message)
     if not attachments:
         log_event("message_no_attachments", message_id=message_id)
-        return internal_date_ms
+        return internal_date_ms, True
 
     for attachment_meta in attachments:
         raw_filename = attachment_meta["filename"]
@@ -153,7 +168,35 @@ def _process_message(service, message_id: str) -> int:
             )
             database.insert_document(document)
 
-        # Step f: save ONE single consolidated reasoning report in storage/reason/
+        # Step f: if doc_type is "resume", persist sub-classification analysis to resume_analyses collection
+        if classification.doc_type.lower() == "resume":
+            detected_stacks = []
+            for folder in classification.target_folders:
+                parts = folder.split("/")
+                if len(parts) == 2:
+                    role_slug, level_str = parts[0], parts[1]
+                elif len(parts) >= 3 and parts[0] == "resumes":
+                    role_slug, level_str = parts[1], parts[2]
+                else:
+                    continue
+
+                detected_stacks.append(
+                    StackExperience(
+                        stack=role_slug,
+                        years=0.0,
+                        experience_band=level_str,
+                        confidence=classification.confidence,
+                        evidence=classification.reasoning or "",
+                    )
+                )
+            analysis = ResumeAnalysis(
+                message_id=message_id,
+                filename=inbox_filename,
+                stacks=detected_stacks,
+            )
+            database.insert_resume_analysis(analysis)
+
+        # Step g: save ONE single consolidated reasoning report in storage/reason/
         all_folders_str = ", ".join(classification.target_folders)
         email_received_dt = datetime.fromtimestamp(internal_date_ms / 1000, tz=timezone.utc).isoformat() if internal_date_ms else "N/A"
         processed_dt = datetime.now(timezone.utc).isoformat()
@@ -174,7 +217,7 @@ def _process_message(service, message_id: str) -> int:
         )
         tools.save_reason_file(inbox_filename, reason_text)
 
-    return internal_date_ms
+    return internal_date_ms, True
 
 
 if __name__ == "__main__":

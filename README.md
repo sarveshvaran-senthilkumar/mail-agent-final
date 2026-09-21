@@ -9,8 +9,8 @@ A production-grade, RAG-assisted automated document processing agent that ingest
 The **Mail Agent** solves the problem of manual email attachment sorting and candidate screening by providing an automated, intelligent document ingestion and classification pipeline:
 
 * **Automated Gmail Ingestion**: Periodically polls Gmail for new emails containing file attachments, maintaining millisecond-precision timestamp cursors (`RunCursor`) to avoid double-processing.
-* **Open-Ended LLM Semantic Domain Classification**: Replaces brittle `if/else` keyword lists with pure LLM semantic reasoning to evaluate candidate resumes, automatically filing them into **15 canonical technology stack directories** (`ai`, `devops`, `full-stack`, `java`, `data-engineering`, `mobile`, `frontend`, `backend`, `cloud`, `security`, `consultant`, `scrum-master`, `project-manager`, `hr`, `other-tech`).
-* **Experience Band Sorting**: Calculates stack-specific experience tenure from position date ranges and sub-categorizes resumes into experience bands (`0-2yrs`, `2-5yrs`, `5-10yrs`, `10+yrs`).
+* **Open-Ended LLM Semantic Domain Classification**: Replaces brittle `if/else` keyword lists with pure LLM semantic reasoning to evaluate candidate resumes, automatically filing them into **42 canonical role directories** (e.g., `software-engineer`, `ai-ml-engineer`, `data-engineer`, `java-developer`, `sap-abap-developer`, `pega-rpa-developer`, `hyperion-essbase-engineer`).
+* **Experience Level Sorting**: Calculates role-specific experience tenure from position date ranges and sub-categorizes resumes into level directories (`level-1` [0-3 yrs], `level-2` [3-5 yrs], `level-3` [5-8 yrs], `level-4` [8-12 yrs], `level-5` [12+ yrs]).
 * **Audit Trail & Reasoning Reports**: Generates strictly **one consolidated reasoning report (`*_reason.txt`)** per attachment under `storage/reason/` containing ISO timestamps, confidence scores, target folder assignments, and extracted context.
 * **Idempotency & Database Metadata**: Stores structured document metadata (`user_id`, `message_id`, `storage_path`, `llm_tag`) in MongoDB and prevents duplicate processing via `processed_messages`.
 
@@ -34,7 +34,7 @@ The **Mail Agent** solves the problem of manual email attachment sorting and can
                                                                         ▼
  ┌──────────────────────────────────────────────────────────────────────────────────┐
  │                                 File Storage & Audit                             │
- │  • Save copies to: storage/resumes/java/5-10yrs/ & storage/resumes/ai/2-5yrs/    │
+ │  • Save copies to: storage/java-developer/level-3/ & storage/ai-ml-engineer/level-1/ │
  │  • Write report to: storage/reason/alex_cv_reason.txt                            │
  │  • Insert metadata to MongoDB & advance cursor                                   │
  └──────────────────────────────────────────────────────────────────────────────────┘
@@ -43,8 +43,8 @@ The **Mail Agent** solves the problem of manual email attachment sorting and can
 1. **Authentication & Cursor Check**: Connects to Gmail via OAuth2 (`credentials.json` / `token.json`) and loads the last processed timestamp (`last_internal_date_ms`) from MongoDB.
 2. **Attachment Staging**: Downloads incoming file attachments and stages an unaltered copy in `storage/inbox/` (e.g. `storage/inbox/Suresh_Veeraraghavan.pdf`).
 3. **RAG Text Extraction**: Extracts text from PDF (`pdfplumber`), Word (`python-docx`), or plain text files up to 15,000 characters.
-4. **Single-Pass LLM Classification**: Passes email metadata + extracted document text to Qwen via OpenAI SDK. The LLM infers candidate domains, calculates experience bands, and returns target folder paths in one call.
-5. **Multi-Folder Filing & Reasoning Generation**: Copies the attachment into all LLM-selected target folders (`storage/resumes/java/10+yrs/`, `storage/resumes/ai/2-5yrs/`) with automatic filename collision de-confliction (`_1`, `_2`), writes a single `.txt` reasoning report to `storage/reason/`, inserts metadata to MongoDB, and updates the run cursor.
+4. **Single-Pass LLM Classification**: Passes email metadata + extracted document text to Qwen via OpenAI SDK. The LLM infers candidate roles, calculates experience levels, and returns target folder paths in one call.
+5. **Multi-Folder Filing & Reasoning Generation**: Copies the attachment into all LLM-selected target folders (`storage/java-developer/level-5/`, `storage/ai-ml-engineer/level-1/`) with automatic filename collision de-confliction (`_1`, `_2`), writes a single `.txt` reasoning report to `storage/reason/`, inserts metadata to MongoDB, and updates the run cursor.
 
 ---
 
@@ -127,7 +127,7 @@ mail-agent/
 └── storage/                    # Root directory for local persistent file storage (excluded from Git).
     ├── inbox/                  # Staging directory storing raw original copies of all incoming email attachments before classification.
     ├── reason/                 # Consolidated reasoning report directory holding one single reasoning .txt file per attachment.
-    ├── resumes/                # Sub-classified resume directory structured by domain and experience band (e.g. resumes/java/5-10yrs/).
+    ├── resumes/                # Sub-classified resume directory structured by domain and experience level (e.g. resumes/java/level-3/).
     ├── invoices/               # Storage directory holding classified invoice documents.
     ├── contracts/              # Storage directory holding classified contract documents.
     └── misc/                   # Fallback directory for unclassified or zero-character extracted documents.

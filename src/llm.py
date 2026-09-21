@@ -83,7 +83,7 @@ def classify(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0,
-            max_tokens=2048,
+            max_tokens=4096,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         msg = response.choices[0].message
@@ -119,8 +119,9 @@ def classify(
 
 def _safe_parse(raw_text: str) -> Optional[dict]:
     """
-    Models sometimes wrap JSON in markdown fences, append text, or include unescaped newlines.
-    Strip fences defensively, pass strict=False, and use regex extraction if needed.
+    Models sometimes wrap JSON in markdown fences, append text, include unescaped newlines,
+    or truncate trailing reasoning strings before closing braces.
+    Strip fences defensively, auto-repair truncated trailing quotes/braces, and use regex recovery.
     """
     text = raw_text.strip()
     if text.startswith("```"):
@@ -139,6 +140,34 @@ def _safe_parse(raw_text: str) -> Optional[dict]:
         try:
             return json.loads(match.group(0), strict=False)
         except json.JSONDecodeError:
+            pass
+
+    # Auto-repair truncated JSON strings (e.g. trailing reasoning string cut off before closing quote/brace)
+    for suffix in ['"}', '"}]}', '"]}', '}']:
+        try:
+            return json.loads(text + suffix, strict=False)
+        except json.JSONDecodeError:
+            pass
+
+    # Regex recovery: extract doc_type and target_folders even if trailing reasoning is truncated
+    doc_type_match = re.search(r'"doc_type"\s*:\s*"([^"]+)"', text)
+    target_folders_match = re.search(r'"target_folders"\s*:\s*(\[[^\]]+\])', text, re.DOTALL)
+    confidence_match = re.search(r'"confidence"\s*:\s*([0-9.]+)', text)
+    reasoning_match = re.search(r'"reasoning"\s*:\s*"([^"]*)', text, re.DOTALL)
+
+    if doc_type_match and target_folders_match:
+        try:
+            doc_type = doc_type_match.group(1)
+            target_folders = json.loads(target_folders_match.group(1), strict=False)
+            confidence = float(confidence_match.group(1)) if confidence_match else 0.8
+            reasoning = reasoning_match.group(1).strip() if reasoning_match else "Partial JSON extracted"
+            return {
+                "doc_type": doc_type,
+                "target_folders": target_folders,
+                "confidence": confidence,
+                "reasoning": reasoning[:200],
+            }
+        except Exception:
             pass
 
     return None

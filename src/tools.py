@@ -14,6 +14,7 @@ Polling strategy:
   - On first run after_ms=0 so all mail with attachments is fetched.
 """
 import base64
+from datetime import datetime, timezone
 from email.utils import parseaddr
 from pathlib import Path
 from typing import Optional
@@ -76,13 +77,14 @@ def get_gmail_service():
 
 def list_new_messages(service, after_ms: int = 0) -> list[dict]:
     """
-    Returns messages with attachments that arrived after after_ms (epoch ms).
+    Returns messages with attachments that arrived on or after after_ms (epoch ms).
     after_ms=0 on the first run fetches all mail with attachments.
-    Gmail's after: operator works in epoch seconds, so we convert.
+    Gmail's after: operator requires YYYY/MM/DD date format.
     """
-    after_seconds = after_ms // 1000
-    if after_seconds > 0:
-        query = f"has:attachment after:{after_seconds}"
+    if after_ms > 0:
+        dt = datetime.fromtimestamp(after_ms / 1000, tz=timezone.utc)
+        date_str = dt.strftime("%Y/%m/%d")
+        query = f"has:attachment after:{date_str}"
     else:
         query = "has:attachment"
 
@@ -131,7 +133,7 @@ def parse_email_headers(message: dict) -> dict:
 def get_message_body_text(message: dict) -> str:
     """
     Best-effort plain-text body extraction (walks multipart payloads).
-    Kept for potential future use; NOT sent to the LLM in the new pipeline.
+    Consolidated into the user prompt alongside attachment text for LLM classification.
     """
     def _walk(part) -> str:
         mime_type = part.get("mimeType", "")

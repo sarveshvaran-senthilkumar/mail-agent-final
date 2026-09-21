@@ -47,3 +47,21 @@ def test_classify_falls_back_on_api_error(monkeypatch):
 def test_safe_parse_strips_markdown_fences():
     parsed = llm._safe_parse('```json\n{"doc_type": "x", "folder": "y", "confidence": 0.5}\n```')
     assert parsed == {"doc_type": "x", "folder": "y", "confidence": 0.5}
+
+
+def test_safe_parse_repairs_truncated_reasoning_string():
+    truncated_text = (
+        '{\n'
+        '  "doc_type": "resume",\n'
+        '  "target_folders": [\n'
+        '    "resumes/data-engineering/level-5",\n'
+        '    "resumes/ai/level-5"\n'
+        '  ],\n'
+        '  "confidence": 0.95,\n'
+        '  "reasoning": "The document is a resume for Vishu Kalier. Active in Eternal 12 month'
+    )
+    parsed = llm._safe_parse(truncated_text)
+    assert parsed is not None
+    assert parsed["doc_type"] == "resume"
+    assert parsed["target_folders"] == ["resumes/data-engineering/level-5", "resumes/ai/level-5"]
+    assert parsed["confidence"] == 0.95

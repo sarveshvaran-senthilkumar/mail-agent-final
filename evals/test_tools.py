@@ -20,7 +20,7 @@ def test_list_attachments(sample_gmail_message):
 
 
 def test_save_file_writes_and_dedupes(tmp_path, monkeypatch):
-    from config import settings
+    from src.config import settings
     monkeypatch.setattr(settings, "storage_root", str(tmp_path))
 
     path1 = tools.save_file(b"content-a", "invoices", "file.pdf")

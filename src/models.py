@@ -83,7 +83,7 @@ class StackExperience(BaseModel):
     """
     stack: str                           # canonical folder name e.g. "ai", "devops", "java"
     years: float                         # years of experience in THIS stack specifically
-    experience_band: str                 # "0-2yrs" | "2-5yrs" | "5-10yrs" | "10+yrs"
+    experience_band: str                 # "level-1" | "level-2" | "level-3" | "level-4" | "level-5"
     confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     evidence: str = ""                   # one-sentence reason from the LLM
 
